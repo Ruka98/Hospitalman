@@ -3,10 +3,12 @@ import { getCurrentProfile } from "@/lib/auth"
 import {
   addNurseReport,
   addOrderResult,
+  assignStaffToPatient,
   createCareOrder,
   createClinicalVisitEntry,
   getOrdersForUser,
   getPatientsForStaff,
+  getPatientHistory,
   listNotifications,
   listStaffByRole,
 } from "@/lib/hospital"
@@ -21,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FilePlus, Inbox, ListChecks, Stethoscope } from "lucide-react"
 
-export default async function StaffDashboard() {
+export default async function StaffDashboard({ searchParams }: { searchParams?: { patientId?: string } }) {
   const profile = await getCurrentProfile()
   if (!profile || profile.role === "admin" || profile.role === "patient") {
     redirect("/login/staff")
@@ -31,6 +33,9 @@ export default async function StaffDashboard() {
   const orders = await getOrdersForUser(profile.user_id, profile.staff_category ?? profile.role)
   const notifications = await listNotifications(profile.user_id)
   const staff = await listStaffByRole()
+  const selectedPatientId = searchParams?.patientId ?? patientAssignments[0]?.id
+  const patientHistory =
+    profile.staff_category === "doctor" && selectedPatientId ? await getPatientHistory(selectedPatientId) : null
 
   async function submitClinicalVisit(formData: FormData) {
     "use server"
@@ -52,6 +57,14 @@ export default async function StaffDashboard() {
       modality: formData.get("modality")?.toString() ?? "",
       notes: formData.get("notes")?.toString() ?? undefined,
       assigneeId: formData.get("assigneeId")?.toString() || undefined,
+    })
+  }
+
+  async function assignCareTeamMember(formData: FormData) {
+    "use server"
+    await assignStaffToPatient({
+      patientId: formData.get("patientId")!.toString(),
+      staffId: formData.get("staffId")!.toString(),
     })
   }
 
@@ -83,6 +96,7 @@ export default async function StaffDashboard() {
   }
 
   const staffOptions = staff.filter((s) => ["radiologist", "ecg_tech"].includes(s.staff_category ?? s.role))
+  const assignableStaff = staff.filter((member) => member.role !== "patient")
 
   return (
     <DashboardLayout role={profile.staff_category ?? profile.role} username={profile.full_name}>
@@ -131,6 +145,7 @@ export default async function StaffDashboard() {
           <TabsList>
             <TabsTrigger value="orders">Orders</TabsTrigger>
             {profile.staff_category === "doctor" && <TabsTrigger value="visits">Clinical visits</TabsTrigger>}
+            {profile.staff_category === "doctor" && <TabsTrigger value="history">Patient history</TabsTrigger>}
             {profile.staff_category === "nurse" && <TabsTrigger value="nursing">Nursing reports</TabsTrigger>}
             {(profile.staff_category === "radiologist" || profile.staff_category === "ecg_tech") && (
               <TabsTrigger value="results">Results</TabsTrigger>
@@ -176,6 +191,38 @@ export default async function StaffDashboard() {
                     <Button type="submit" className="w-full">
                       Submit order
                     </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {profile.staff_category === "doctor" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Assign staff to patient</CardTitle>
+                  <CardDescription>Link radiologists or other team members so they can follow the patient.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form action={assignCareTeamMember} className="grid gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <select name="patientId" className="rounded-md border border-input bg-background px-3 py-2" required>
+                        <option value="">Select patient</option>
+                        {patientAssignments.map((patient) => (
+                          <option key={patient.id} value={patient.id}>
+                            {patient.full_name}
+                          </option>
+                        ))}
+                      </select>
+                      <select name="staffId" className="rounded-md border border-input bg-background px-3 py-2" required>
+                        <option value="">Select staff member</option>
+                        {assignableStaff.map((member) => (
+                          <option key={member.user_id} value={member.user_id}>
+                            {member.full_name} ({member.staff_category ?? member.role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button type="submit">Assign to care team</Button>
                   </form>
                 </CardContent>
               </Card>
@@ -249,6 +296,180 @@ export default async function StaffDashboard() {
                     <Textarea name="plan" placeholder="Plan" required />
                     <Button type="submit">Save note</Button>
                   </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {profile.staff_category === "doctor" && (
+            <TabsContent value="history" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Patient history</CardTitle>
+                  <CardDescription>Select a patient to review their encounters and diagnostic results.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <form className="grid grid-cols-1 md:grid-cols-3 gap-3" method="get">
+                    <select
+                      name="patientId"
+                      className="rounded-md border border-input bg-background px-3 py-2"
+                      defaultValue={selectedPatientId}
+                    >
+                      {patientAssignments.map((patient) => (
+                        <option key={patient.id} value={patient.id}>
+                          {patient.full_name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button type="submit">Load history</Button>
+                  </form>
+
+                  {!patientHistory && (
+                    <Alert>
+                      <AlertDescription>Select an assigned patient to load their record.</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {patientHistory && (
+                    <div className="space-y-4">
+                      <div className="grid lg:grid-cols-2 gap-4">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Clinical visits</CardTitle>
+                            <CardDescription>Notes recorded by any doctor.</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="border rounded-lg">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Doctor</TableHead>
+                                    <TableHead>Diagnosis</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {patientHistory.visits.map((visit) => (
+                                    <TableRow key={visit.id}>
+                                      <TableCell>{new Date(visit.created_at).toLocaleString()}</TableCell>
+                                      <TableCell>{visit.doctor?.full_name ?? "Doctor"}</TableCell>
+                                      <TableCell>{visit.diagnosis}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                              {patientHistory.visits.length === 0 && (
+                                <Alert className="m-3">
+                                  <AlertDescription>No visits logged yet.</AlertDescription>
+                                </Alert>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Orders and reports</CardTitle>
+                            <CardDescription>Radiology or ECG activity with available reports.</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="border rounded-lg">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Order</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Findings</TableHead>
+                                    <TableHead>Report</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {patientHistory.orders.map((order: any) => {
+                                    const latestResult = order.results?.[0]
+                                    return (
+                                      <TableRow key={order.id}>
+                                        <TableCell className="whitespace-nowrap">#{order.id}</TableCell>
+                                        <TableCell>
+                                          <Badge
+                                            variant={
+                                              order.status === "completed"
+                                                ? "default"
+                                                : order.status === "in_progress"
+                                                  ? "outline"
+                                                  : "secondary"
+                                            }
+                                          >
+                                            {order.status}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell className="max-w-[200px] text-sm text-gray-800">
+                                          {latestResult?.findings ?? "Pending"}
+                                        </TableCell>
+                                        <TableCell>
+                                          {latestResult?.signed_url ? (
+                                            <Button variant="link" asChild className="px-0">
+                                              <a href={latestResult.signed_url} target="_blank" rel="noreferrer">
+                                                Download
+                                              </a>
+                                            </Button>
+                                          ) : (
+                                            <span className="text-gray-600">Not uploaded</span>
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    )
+                                  })}
+                                </TableBody>
+                              </Table>
+                              {patientHistory.orders.length === 0 && (
+                                <Alert className="m-3">
+                                  <AlertDescription>No diagnostic orders yet.</AlertDescription>
+                                </Alert>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Nursing reports</CardTitle>
+                          <CardDescription>Vitals and bedside notes.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="border rounded-lg">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Date</TableHead>
+                                  <TableHead>Nurse</TableHead>
+                                  <TableHead>Vitals</TableHead>
+                                  <TableHead>Notes</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {patientHistory.nurseNotes.map((note: any) => (
+                                  <TableRow key={note.id}>
+                                    <TableCell>{new Date(note.created_at).toLocaleString()}</TableCell>
+                                    <TableCell>{note.nurse?.full_name ?? "Nurse"}</TableCell>
+                                    <TableCell className="text-sm text-gray-700">
+                                      BP: {note.vitals?.bp || "-"} | Pulse: {note.vitals?.pulse || "-"} | SpO2: {note.vitals?.spo2 || "-"}
+                                    </TableCell>
+                                    <TableCell>{note.notes ?? "-"}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                            {patientHistory.nurseNotes.length === 0 && (
+                              <Alert className="m-3">
+                                <AlertDescription>No nursing documentation yet.</AlertDescription>
+                              </Alert>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

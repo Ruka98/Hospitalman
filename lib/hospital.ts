@@ -31,6 +31,18 @@ export type CareOrder = {
   assignee?: { full_name: string }
 }
 
+export type OrderResult = {
+  id: number
+  order_id: number
+  findings: string
+  impression: string
+  status: "pending" | "in_progress" | "completed"
+  created_at: string
+  created_by: string
+  report_path?: string | null
+  signed_url?: string | null
+}
+
 export async function getPatientsForStaff(staffId: string) {
   const supabase = createSupabaseServerClient()
   const { data, error } = await supabase
@@ -40,6 +52,26 @@ export async function getPatientsForStaff(staffId: string) {
 
   if (error) return []
   return (data ?? []).map((row) => ({ id: row.patient?.user_id ?? row.patient_id, full_name: row.patient?.full_name ?? "" }))
+}
+
+export async function assignStaffToPatient(payload: { patientId: string; staffId: string }) {
+  const supabase = createSupabaseServerClient()
+  const { error } = await supabase
+    .from("care_assignments")
+    .upsert({ patient_id: payload.patientId, clinician_id: payload.staffId }, { onConflict: "patient_id,clinician_id" })
+
+  if (error) return { error: error.message }
+
+  await supabase.from("notifications").insert({
+    recipient_id: payload.staffId,
+    title: "New patient assignment",
+    body: "You have been assigned to a patient's care team.",
+    related_type: "assignment",
+    related_id: payload.patientId,
+  })
+
+  revalidatePath("/dashboard")
+  return { success: true }
 }
 
 export async function getOrdersForUser(userId: string, role: AppRole) {
@@ -162,6 +194,31 @@ export async function addOrderResult(payload: {
     .update({ status: payload.status })
     .eq("id", payload.orderId)
 
+  const { data: order } = await supabase
+    .from("care_orders")
+    .select("patient_id, ordering_doctor")
+    .eq("id", payload.orderId)
+    .single()
+
+  if (order) {
+    await supabase.from("notifications").insert([
+      {
+        recipient_id: order.patient_id,
+        title: "New result available",
+        body: "A new diagnostic report has been uploaded to your account.",
+        related_type: "order",
+        related_id: payload.orderId,
+      },
+      {
+        recipient_id: order.ordering_doctor,
+        title: "Diagnostic report completed",
+        body: "Your ordered study now has a completed report.",
+        related_type: "order",
+        related_id: payload.orderId,
+      },
+    ])
+  }
+
   revalidatePath("/dashboard")
   return { success: true, path: storedPath }
 }
@@ -205,9 +262,24 @@ export async function getPatientHistory(patientId: string) {
       .order("created_at", { ascending: false }),
   ])
 
+  const ordersWithUrls = await Promise.all(
+    ((orders.data as any[]) ?? []).map(async (order) => {
+      const results = await Promise.all(
+        (order.results ?? []).map(async (result: any) => {
+          if (!result.report_path) return result
+
+          const { data: signed } = await supabase.storage.from("imaging").createSignedUrl(result.report_path, 3600)
+          return { ...result, signed_url: signed?.signedUrl ?? null }
+        }),
+      )
+
+      return { ...order, results }
+    }),
+  )
+
   return {
     visits: (visits.data as ClinicalVisit[]) ?? [],
-    orders: (orders.data as any[]) ?? [],
+    orders: ordersWithUrls,
     nurseNotes: nurseNotes.data ?? [],
   }
 }
