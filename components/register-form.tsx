@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -31,14 +31,15 @@ const roleConfig = {
 export function RegisterForm({ role }: { role: "staff" | "patient" }) {
   const router = useRouter()
   const [formData, setFormData] = useState({
-    username: "",
     password: "",
     fullName: "",
     email: "",
     phone: "",
+    staffCategory: "doctor" as "doctor" | "radiologist" | "nurse" | "ecg_tech" | "lab_tech" | "pharmacist" | "receptionist",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
   const config = roleConfig[role]
   const Icon = config.icon
@@ -48,14 +49,21 @@ export function RegisterForm({ role }: { role: "staff" | "patient" }) {
     setError("")
     setLoading(true)
 
-    const result = await register({ ...formData, role })
+    startTransition(async () => {
+      const resolvedRole = role === "staff" ? formData.staffCategory : "patient"
+      const result = await register({
+        ...formData,
+        role: resolvedRole,
+        staffCategory: role === "staff" ? formData.staffCategory : undefined,
+      })
 
-    if (result.error) {
-      setError(result.error)
-      setLoading(false)
-    } else {
-      router.push(`/dashboard/${role}`)
-    }
+      if (result.error) {
+        setError(result.error)
+        setLoading(false)
+      } else {
+        router.push(`/dashboard/${role}`)
+      }
+    })
   }
 
   return (
@@ -86,17 +94,6 @@ export function RegisterForm({ role }: { role: "staff" | "patient" }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              type="text"
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              required
-              placeholder="Choose a username"
-            />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
@@ -107,6 +104,27 @@ export function RegisterForm({ role }: { role: "staff" | "patient" }) {
               placeholder="Enter your email"
             />
           </div>
+          {role === "staff" && (
+            <div className="space-y-2">
+              <Label htmlFor="staffCategory">Staff role</Label>
+              <select
+                id="staffCategory"
+                className="w-full rounded-md border border-input bg-background px-3 py-2"
+                value={formData.staffCategory}
+                onChange={(e) =>
+                  setFormData({ ...formData, staffCategory: e.target.value as typeof formData.staffCategory })
+                }
+              >
+                <option value="doctor">Doctor</option>
+                <option value="radiologist">Radiologist</option>
+                <option value="nurse">Nurse</option>
+                <option value="ecg_tech">ECG Technician</option>
+                <option value="lab_tech">Lab Technician</option>
+                <option value="pharmacist">Pharmacist</option>
+                <option value="receptionist">Receptionist</option>
+              </select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="phone">Phone</Label>
             <Input
@@ -130,8 +148,8 @@ export function RegisterForm({ role }: { role: "staff" | "patient" }) {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating account..." : "Register"}
+          <Button type="submit" className="w-full" disabled={loading || isPending}>
+            {loading || isPending ? "Creating account..." : "Register"}
           </Button>
           <p className="text-sm text-center text-gray-600">
             Already have an account?{" "}

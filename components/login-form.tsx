@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -36,10 +36,11 @@ const roleConfig = {
 
 export function LoginForm({ role }: { role: "admin" | "staff" | "patient" }) {
   const router = useRouter()
-  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
   const config = roleConfig[role]
   const Icon = config.icon
@@ -49,14 +50,18 @@ export function LoginForm({ role }: { role: "admin" | "staff" | "patient" }) {
     setError("")
     setLoading(true)
 
-    const result = await login(username, password, role)
+    startTransition(async () => {
+      const result = await login(email, password)
 
-    if (result.error) {
-      setError(result.error)
-      setLoading(false)
-    } else {
-      router.push(`/dashboard/${role}`)
-    }
+      if (result.error) {
+        setError(result.error)
+        setLoading(false)
+      } else {
+        const destination =
+          result.role === "admin" ? "/dashboard/admin" : result.role === "patient" ? "/dashboard/patient" : "/dashboard/staff"
+        router.push(destination)
+      }
+    })
   }
 
   return (
@@ -76,14 +81,14 @@ export function LoginForm({ role }: { role: "admin" | "staff" | "patient" }) {
             </Alert>
           )}
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="email">Email</Label>
             <Input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="Enter your username"
+              placeholder="Enter your email"
             />
           </div>
           <div className="space-y-2">
@@ -99,8 +104,8 @@ export function LoginForm({ role }: { role: "admin" | "staff" | "patient" }) {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
+          <Button type="submit" className="w-full" disabled={loading || isPending}>
+            {loading || isPending ? "Logging in..." : "Login"}
           </Button>
           {role !== "admin" && (
             <p className="text-sm text-center text-gray-600">

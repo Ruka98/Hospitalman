@@ -5,24 +5,27 @@ import type React from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { logout } from "@/lib/auth"
-import { Shield, Stethoscope, User, LogOut } from "lucide-react"
+import { Shield, Stethoscope, User, LogOut, Scan, HeartPulse, Nurse, Microscope, Pill, Phone } from "lucide-react"
+import type { AppRole } from "@/lib/auth"
 
-const roleConfig = {
-  admin: {
-    icon: Shield,
-    color: "text-red-600",
-    bgColor: "bg-red-100",
-  },
-  staff: {
-    icon: Stethoscope,
-    color: "text-blue-600",
-    bgColor: "bg-blue-100",
-  },
-  patient: {
-    icon: User,
-    color: "text-green-600",
-    bgColor: "bg-green-100",
-  },
+const roleConfig: Record<
+  AppRole,
+  {
+    icon: typeof Shield
+    color: string
+    bgColor: string
+    label: string
+  }
+> = {
+  admin: { icon: Shield, color: "text-red-600", bgColor: "bg-red-100", label: "Admin" },
+  doctor: { icon: Stethoscope, color: "text-blue-600", bgColor: "bg-blue-100", label: "Doctor" },
+  radiologist: { icon: Scan, color: "text-purple-600", bgColor: "bg-purple-100", label: "Radiologist" },
+  nurse: { icon: Nurse, color: "text-emerald-600", bgColor: "bg-emerald-100", label: "Nurse" },
+  ecg_tech: { icon: HeartPulse, color: "text-amber-600", bgColor: "bg-amber-100", label: "ECG Technician" },
+  lab_tech: { icon: Microscope, color: "text-indigo-600", bgColor: "bg-indigo-100", label: "Lab Technician" },
+  pharmacist: { icon: Pill, color: "text-teal-600", bgColor: "bg-teal-100", label: "Pharmacist" },
+  receptionist: { icon: Phone, color: "text-sky-600", bgColor: "bg-sky-100", label: "Receptionist" },
+  patient: { icon: User, color: "text-green-600", bgColor: "bg-green-100", label: "Patient" },
 }
 
 export function DashboardLayout({
@@ -31,7 +34,7 @@ export function DashboardLayout({
   username,
 }: {
   children: React.ReactNode
-  role: "admin" | "staff" | "patient"
+  role: AppRole
   username: string
 }) {
   const router = useRouter()
@@ -53,7 +56,7 @@ export function DashboardLayout({
                 <Icon className={`w-5 h-5 ${config.color}`} />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900 capitalize">{role} Portal</h2>
+                <h2 className="font-semibold text-gray-900 capitalize">{config.label} Portal</h2>
                 <p className="text-sm text-gray-600">{username}</p>
               </div>
             </div>

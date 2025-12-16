@@ -1,146 +1,222 @@
 import { redirect } from "next/navigation"
-import { getSession, getAllUsers } from "@/lib/auth"
-import { getAppointments } from "@/lib/appointments"
-import { getMedicalRecords } from "@/lib/medical-records"
+import { getCurrentProfile } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { BookAppointmentForm } from "@/components/book-appointment-form"
-import { AppointmentList } from "@/components/appointment-list"
-import { MedicalRecordsList } from "@/components/medical-records-list"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, CheckCircle, Clock, FileText } from "lucide-react"
+import { getPatientHistory, listNotifications } from "@/lib/hospital"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Calendar, FolderOpenDot, Stethoscope } from "lucide-react"
 
 export default async function PatientDashboard() {
-  const session = await getSession()
-
-  if (!session || session.role !== "patient") {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.role !== "patient") {
     redirect("/login/patient")
   }
 
-  const appointments = await getAppointments()
-  const allUsers = await getAllUsers()
-  const doctors = allUsers.filter((u) => u.role === "staff")
-  const medicalRecords = await getMedicalRecords()
-
-  const stats = {
-    total: appointments.length,
-    pending: appointments.filter((a) => a.status === "pending").length,
-    confirmed: appointments.filter((a) => a.status === "confirmed").length,
-    completed: appointments.filter((a) => a.status === "completed").length,
-    records: medicalRecords.length,
-  }
-
-  // Sort appointments by date and time
-  const sortedAppointments = [...appointments].sort((a, b) => {
-    const dateA = new Date(`${a.date} ${a.time}`)
-    const dateB = new Date(`${b.date} ${b.time}`)
-    return dateB.getTime() - dateA.getTime()
-  })
+  const history = await getPatientHistory(profile.user_id)
+  const notifications = await listNotifications(profile.user_id)
 
   return (
-    <DashboardLayout role="patient" username={session.username}>
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Patient Dashboard</h1>
-          <p className="text-gray-600 mt-2">Book appointments and view your medical records</p>
+    <DashboardLayout role="patient" username={profile.full_name}>
+      <div className="space-y-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold text-gray-900">Patient Portal</h1>
+          <p className="text-gray-600">Access your visits, results, and notifications. Only you can see this data.</p>
         </div>
 
-        <div className="grid md:grid-cols-5 gap-6">
+        <div className="grid md:grid-cols-3 gap-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total</CardTitle>
+            <CardHeader className="flex items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Clinical visits</CardTitle>
+              <Stethoscope className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{history.visits.length}</div>
+              <p className="text-xs text-gray-600">Doctor authored notes</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Orders</CardTitle>
+              <FolderOpenDot className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{history.orders.length}</div>
+              <p className="text-xs text-gray-600">Radiology and ECG</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Notifications</CardTitle>
               <Calendar className="h-4 w-4 text-gray-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-gray-600 mt-1">All appointments</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pending}</div>
-              <p className="text-xs text-gray-600 mt-1">Awaiting confirmation</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Confirmed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.confirmed}</div>
-              <p className="text-xs text-gray-600 mt-1">Scheduled</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.completed}</div>
-              <p className="text-xs text-gray-600 mt-1">Past visits</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Records</CardTitle>
-              <FileText className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.records}</div>
-              <p className="text-xs text-gray-600 mt-1">Medical files</p>
+              <div className="text-2xl font-bold">{notifications.length}</div>
+              <p className="text-xs text-gray-600">Results and updates</p>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="book" className="space-y-4">
+        <Tabs defaultValue="visits" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="book">Book Appointment</TabsTrigger>
-            <TabsTrigger value="appointments">My Appointments</TabsTrigger>
-            <TabsTrigger value="medical-records">My Medical Records</TabsTrigger>
+            <TabsTrigger value="visits">Doctor notes</TabsTrigger>
+            <TabsTrigger value="orders">Results</TabsTrigger>
+            <TabsTrigger value="nursing">Nursing reports</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="book">
+          <TabsContent value="visits">
             <Card>
               <CardHeader>
-                <CardTitle>Book New Appointment</CardTitle>
-                <CardDescription>Schedule an appointment with a doctor</CardDescription>
+                <CardTitle>Clinical visits</CardTitle>
+                <CardDescription>Read-only history of your encounters.</CardDescription>
               </CardHeader>
               <CardContent>
-                <BookAppointmentForm doctors={doctors} />
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Doctor</TableHead>
+                        <TableHead>Diagnosis</TableHead>
+                        <TableHead>Plan</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.visits.map((visit) => (
+                        <TableRow key={visit.id}>
+                          <TableCell>{new Date(visit.created_at).toLocaleString()}</TableCell>
+                          <TableCell>{visit.doctor?.full_name ?? "Doctor"}</TableCell>
+                          <TableCell>{visit.diagnosis}</TableCell>
+                          <TableCell>{visit.plan}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {history.visits.length === 0 && (
+                    <Alert className="m-3">
+                      <AlertDescription>No visits recorded yet.</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="appointments">
+          <TabsContent value="orders">
             <Card>
               <CardHeader>
-                <CardTitle>Your Appointments</CardTitle>
-                <CardDescription>View your upcoming and past appointments</CardDescription>
+                <CardTitle>Completed results</CardTitle>
+                <CardDescription>Radiology or ECG orders that belong to you.</CardDescription>
               </CardHeader>
               <CardContent>
-                <AppointmentList appointments={sortedAppointments} role="patient" />
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Findings</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.orders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell>#{order.id}</TableCell>
+                          <TableCell className="capitalize">{order.order_type}</TableCell>
+                          <TableCell>
+                            <Badge variant={order.status === "completed" ? "default" : "secondary"}>{order.status}</Badge>
+                          </TableCell>
+                          <TableCell>{order.results?.[0]?.findings ?? "Pending"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {history.orders.length === 0 && (
+                    <Alert className="m-3">
+                      <AlertDescription>No diagnostic orders yet.</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="medical-records">
+          <TabsContent value="nursing">
             <Card>
               <CardHeader>
-                <CardTitle>Your Medical Records</CardTitle>
-                <CardDescription>View your medical history, scans, and reports</CardDescription>
+                <CardTitle>Nursing reports</CardTitle>
+                <CardDescription>Vitals captured by nursing staff.</CardDescription>
               </CardHeader>
               <CardContent>
-                <MedicalRecordsList records={medicalRecords} canDelete={false} />
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Nurse</TableHead>
+                        <TableHead>Vitals</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.nurseNotes.map((note: any) => (
+                        <TableRow key={note.id}>
+                          <TableCell>{new Date(note.created_at).toLocaleString()}</TableCell>
+                          <TableCell>{note.nurse?.full_name ?? "Nurse"}</TableCell>
+                          <TableCell className="text-sm text-gray-700">
+                            BP: {note.vitals?.bp || "-"} | Pulse: {note.vitals?.pulse || "-"} | SpO2: {note.vitals?.spo2 || "-"}
+                          </TableCell>
+                          <TableCell>{note.notes ?? "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {history.nurseNotes.length === 0 && (
+                    <Alert className="m-3">
+                      <AlertDescription>No nursing reports yet.</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <Card>
+              <CardHeader>
+                <CardTitle>Notifications</CardTitle>
+                <CardDescription>Results and updates shared with you.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Message</TableHead>
+                        <TableHead>Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {notifications.map((note) => (
+                        <TableRow key={note.id}>
+                          <TableCell className="font-medium">{note.title}</TableCell>
+                          <TableCell>{note.body}</TableCell>
+                          <TableCell>{new Date(note.created_at).toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {notifications.length === 0 && (
+                    <Alert className="m-3">
+                      <AlertDescription>No notifications yet.</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
