@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getPatientHistory, listNotifications } from "@/lib/hospital"
@@ -120,19 +121,40 @@ export default async function PatientDashboard() {
                         <TableHead>Type</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Findings</TableHead>
+                        <TableHead>Impression</TableHead>
+                        <TableHead>Report</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {history.orders.map((order) => (
-                        <TableRow key={order.id}>
-                          <TableCell>#{order.id}</TableCell>
-                          <TableCell className="capitalize">{order.order_type}</TableCell>
-                          <TableCell>
-                            <Badge variant={order.status === "completed" ? "default" : "secondary"}>{order.status}</Badge>
-                          </TableCell>
-                          <TableCell>{order.results?.[0]?.findings ?? "Pending"}</TableCell>
-                        </TableRow>
-                      ))}
+                      {history.orders.map((order: any) => {
+                        const latestResult = order.results?.[0]
+                        return (
+                          <TableRow key={order.id}>
+                            <TableCell>#{order.id}</TableCell>
+                            <TableCell className="capitalize">{order.order_type}</TableCell>
+                            <TableCell>
+                              <Badge variant={order.status === "completed" ? "default" : "secondary"}>{order.status}</Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] text-sm text-gray-800">
+                              {latestResult?.findings ?? "Pending"}
+                            </TableCell>
+                            <TableCell className="max-w-[200px] text-sm text-gray-800">
+                              {latestResult?.impression ?? "Pending"}
+                            </TableCell>
+                            <TableCell>
+                              {latestResult?.signed_url ? (
+                                <Button variant="link" asChild className="px-0">
+                                  <a href={latestResult.signed_url} target="_blank" rel="noreferrer">
+                                    View report
+                                  </a>
+                                </Button>
+                              ) : (
+                                <span className="text-gray-600">Not uploaded</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                   {history.orders.length === 0 && (
