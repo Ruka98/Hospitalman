@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="topbar">
+    <h1>Patient Portal</h1>
+    <div>
+      <span class="muted">Logged in as <b>{{ session["display_name"] }}</b> (Patient)</span>
+      &nbsp; | &nbsp;
+      <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Profile</h2>
+    <p><b>{{ patient.name }}</b></p>
+    <p class="muted">Age: {{ patient.age if patient.age is not none else '-' }} • {{ patient.gender or '-' }} • {{ patient.phone or '-' }}</p>
+  </div>
+
+  <div class="row" style="margin-top:16px;">
+    <div class="card">
+      <h2>Appointments</h2>
+      <table>
+        <thead><tr><th>When</th><th>With</th><th>Service</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for a in my_appointments %}
+            <tr>
+              <td class="muted">{{ a.scheduled_for }}</td>
+              <td>{{ a.staff_name }} <span class="pill">{{ a.staff_role }}</span></td>
+              <td>{{ a.service_name or 'General' }}</td>
+              <td><span class="pill">{{ a.status }}</span></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="muted">No appointments yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Clinical Orders</h2>
+      <table>
+        <thead><tr><th>Order</th><th>Assigned By</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          {% for o in my_orders %}
+            <tr>
+              <td>{{ o.order_type }}</td>
+              <td>{{ o.doctor_name }} <span class="muted">{{ o.doctor_specialty or '-' }}</span></td>
+              <td><span class="pill">{{ o.status }}</span></td>
+              <td class="muted">{{ o.notes or '-' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="muted">No orders yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Medical History</h2>
+    <table>
+      <thead><tr><th>Staff</th><th>Symptoms</th><th>Diagnosis</th><th>Prescriptions</th><th>Notes</th><th>Date</th></tr></thead>
+      <tbody>
+        {% for r in my_records %}
+          <tr>
+            <td>{{ r.staff_name }} <span class="pill">{{ r.staff_role }}</span></td>
+            <td>{{ r.symptoms or '-' }}</td>
+            <td>{{ r.diagnosis or '-' }}</td>
+            <td>{{ r.prescriptions or '-' }}</td>
+            <td>{{ r.notes or '-' }}</td>
+            <td class="muted">{{ r.created_at }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">No records yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
