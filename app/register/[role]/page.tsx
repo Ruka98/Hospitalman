@@ -1,8 +1,8 @@
 import { RegisterForm } from "@/components/register-form"
 import { redirect } from "next/navigation"
 
-export default async function RegisterPage({ params }: { params: Promise<{ role: string }> }) {
-  const { role } = await params
+export default async function RegisterPage({ params }: { params: { role: string } }) {
+  const { role } = params
 
   if (!["staff", "patient"].includes(role)) {
     redirect("/")
